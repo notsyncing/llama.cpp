@@ -1,4 +1,4 @@
-ARG ONEAPI_VERSION=2025.3.3-0-devel-ubuntu24.04
+ARG ONEAPI_VERSION=2026.0.0-devel-ubuntu24.04
 ARG BUILD_DATE=N/A
 ARG APP_VERSION=N/A
 ARG APP_REVISION=N/A
@@ -8,13 +8,14 @@ ARG APP_REVISION=N/A
 FROM intel/deep-learning-essentials:$ONEAPI_VERSION AS build
 
 ARG GGML_SYCL_F16=OFF
-ARG LEVEL_ZERO_VERSION=1.28.2
+ARG GGML_SYCL_GRAPH=OFF
+ARG LEVEL_ZERO_VERSION=1.28.6
 ARG LEVEL_ZERO_UBUNTU_VERSION=u24.04
 RUN apt-get update && \
     apt-get install -y git libssl-dev wget ca-certificates && \
     cd /tmp && \
-    wget -q "https://github.com/oneapi-src/level-zero/releases/download/v${LEVEL_ZERO_VERSION}/level-zero_${LEVEL_ZERO_VERSION}%2B${LEVEL_ZERO_UBUNTU_VERSION}_amd64.deb" -O level-zero.deb && \
-    wget -q "https://github.com/oneapi-src/level-zero/releases/download/v${LEVEL_ZERO_VERSION}/level-zero-devel_${LEVEL_ZERO_VERSION}%2B${LEVEL_ZERO_UBUNTU_VERSION}_amd64.deb" -O level-zero-devel.deb && \
+    wget -q "https://github.com/oneapi-src/level-zero/releases/download/v${LEVEL_ZERO_VERSION}/libze1_${LEVEL_ZERO_VERSION}%2B${LEVEL_ZERO_UBUNTU_VERSION}_amd64.deb" -O level-zero.deb && \
+    wget -q "https://github.com/oneapi-src/level-zero/releases/download/v${LEVEL_ZERO_VERSION}/libze-dev_${LEVEL_ZERO_VERSION}%2B${LEVEL_ZERO_UBUNTU_VERSION}_amd64.deb" -O level-zero-devel.deb && \
     apt-get -o Dpkg::Options::="--force-overwrite" install -y ./level-zero.deb ./level-zero-devel.deb && \
     rm -f /tmp/level-zero.deb /tmp/level-zero-devel.deb
 
@@ -26,8 +27,12 @@ RUN if [ "${GGML_SYCL_F16}" = "ON" ]; then \
         echo "GGML_SYCL_F16 is set" \
         && export OPT_SYCL_F16="-DGGML_SYCL_F16=ON"; \
     fi && \
+    if [ "${GGML_SYCL_GRAPH}" = "ON" ]; then \
+        echo "GGML_SYCL_GRAPH is set" \
+        && export OPT_SYCL_GRAPH="-DGGML_SYCL_GRAPH=ON -DGGML_SYCL_SUPPORT_LEVEL_ZERO=ON -DGGML_SYCL_HOST_MEM_FALLBACK=ON"; \
+    fi && \
     echo "Building with dynamic libs" && \
-    cmake -B build -DGGML_NATIVE=OFF -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DLLAMA_BUILD_TESTS=OFF ${OPT_SYCL_F16} && \
+    cmake -B build -DGGML_NATIVE=OFF -DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DLLAMA_BUILD_TESTS=OFF ${OPT_SYCL_F16} ${OPT_SYCL_GRAPH} && \
     cmake --build build --config Release -j$(nproc)
 
 RUN mkdir -p /app/lib && \
@@ -57,11 +62,11 @@ LABEL org.opencontainers.image.created=$BUILD_DATE \
       org.opencontainers.image.url=$IMAGE_URL \
       org.opencontainers.image.source=$IMAGE_SOURCE
 
-ARG IGC_VERSION=v2.20.5
-ARG IGC_VERSION_FULL=2_2.20.5+19972
-ARG COMPUTE_RUNTIME_VERSION=25.40.35563.10
-ARG COMPUTE_RUNTIME_VERSION_FULL=25.40.35563.10-0
-ARG IGDGMM_VERSION=22.8.2
+ARG IGC_VERSION=v2.30.1
+ARG IGC_VERSION_FULL=2_2.30.1+20950
+ARG COMPUTE_RUNTIME_VERSION=26.09.37435.1
+ARG COMPUTE_RUNTIME_VERSION_FULL=26.09.37435.1-0
+ARG IGDGMM_VERSION=22.9.0
 RUN mkdir /tmp/neo/ && cd /tmp/neo/ \
   && wget https://github.com/intel/intel-graphics-compiler/releases/download/$IGC_VERSION/intel-igc-core-${IGC_VERSION_FULL}_amd64.deb \
   && wget https://github.com/intel/intel-graphics-compiler/releases/download/$IGC_VERSION/intel-igc-opencl-${IGC_VERSION_FULL}_amd64.deb \
